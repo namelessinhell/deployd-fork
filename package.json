@@ -11,9 +11,18 @@
     "node": ">=16.0.0"
   },
   "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./index.js",
+      "default": "./index.js",
+      "types": "./index.d.ts"
+    }
+  },
   "files": [
     "lib",
     "index.js",
+    "index.d.ts",
     "CHANGELOG.md",
     "README.md"
   ],
