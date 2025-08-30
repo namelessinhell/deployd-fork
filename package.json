@@ -17,7 +17,9 @@
       "require": "./index.js",
       "default": "./index.js",
       "types": "./index.d.ts"
-    }
+    },
+    "./lib/*": "./lib/*",
+    "./package.json": "./package.json"
   },
   "files": [
     "lib",
