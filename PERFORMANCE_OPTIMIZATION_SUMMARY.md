@@ -52,6 +52,32 @@ All performance optimizations have been successfully implemented and tested. **1
 - **Cached route matching results**
 - **Performance Impact**: 30-40% improvement in route matching speed
 
+### 7. Router Reuse (No Per-Request Reload) ✅
+**File**: `lib/server.js`
+- Reuse the instantiated router and resources in non-development environments
+- Avoids rebuilding router and re-loading config on every request
+- Still supports hot-reload behavior in development
+- Performance Impact: Reduced per-request overhead and better latency under load
+
+### 8. Session Fast-Path Cache ✅
+**File**: `lib/session.js`
+- Serve existing sessions directly from in-memory cache when valid
+- Throttle `lastActive` persistence to at most once every 10 seconds
+- Falls back to DB only on cache miss or expired session
+- Performance Impact: Eliminates a DB read for most requests; substantial throughput gains
+
+### 9. Regex Precompilation for Routes ✅
+**File**: `lib/router.js`
+- Cache compiled regex objects per resource path (`pathRegexCache`)
+- Reduce repeated RegExp allocations in match loop
+- Performance Impact: Lower CPU usage and faster route evaluation
+
+### 10. HTTP Keep‑Alive Tuning ✅
+**File**: `lib/server.js`
+- Set `keepAliveTimeout` and `headersTimeout` for improved connection reuse
+- Optional `requestTimeout` override via options
+- Performance Impact: Better throughput with many short-lived requests
+
 ## 📦 Dependencies Added
 
 - `lru-cache`: ^10.2.0 - For efficient caching with size limits

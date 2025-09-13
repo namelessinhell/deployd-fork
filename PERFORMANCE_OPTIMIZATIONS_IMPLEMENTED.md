@@ -87,6 +87,47 @@ I have successfully implemented several critical performance optimizations in th
 - Reduced CPU usage for repeated route lookups
 - Faster request processing
 
+### 7. Router Reuse (No Per-Request Reload) ✅
+
+**File**: `lib/server.js`
+**Changes**:
+- Reuse router and resources in non-development to avoid per-request re-instantiation
+- Maintain dynamic reloading behavior in development only
+
+**Performance Impact**:
+- Reduces per-request allocation/initialization overhead
+- Improves latency under sustained load
+
+### 8. Session Fast-Path Cache ✅
+
+**File**: `lib/session.js`
+**Changes**:
+- Return cached session immediately if valid (avoid DB hit)
+- Throttle `lastActive` saves to once per 10s
+- Fallback to DB find on cache miss/expired
+
+**Performance Impact**:
+- Removes a DB read for the majority of requests
+- Significant throughput improvements and lower DB pressure
+
+### 9. Regex Precompilation for Routes ✅
+
+**File**: `lib/router.js`
+**Changes**:
+- Cache compiled regex per resource path (`pathRegexCache`)
+
+**Performance Impact**:
+- Reduced CPU cycles per request for route matching
+
+### 10. HTTP Keep‑Alive Tuning ✅
+
+**File**: `lib/server.js`
+**Changes**:
+- Set `keepAliveTimeout` and `headersTimeout`; optional `requestTimeout`
+
+**Performance Impact**:
+- Better connection reuse and throughput with many short requests
+
 ## Dependencies Added
 
 - `lru-cache`: ^10.2.0 - For efficient caching with size limits
