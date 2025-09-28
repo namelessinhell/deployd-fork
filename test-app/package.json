@@ -4,7 +4,9 @@
   },
   "dependencies": {
     "dpd-dashboard": "*",
-    "dpd-clientlib": "*"
+    "dpd-clientlib": "*",
+    "hello": "file:deps/hello",
+    "proxy": "file:deps/proxy"
   },
   "dpdInclude": [
     "hello",

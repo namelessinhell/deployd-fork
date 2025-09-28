@@ -2,21 +2,6 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
-<a name="1.2.1"></a>
-## [1.2.1] - 2025-08-31
-
-### Fixes
-- exports: enable deep imports like `require('deployd/lib/util/http')` via subpath export mapping.
-- type-loader: resolve modules from app using `createRequire` and support self-hosting modules (e.g., `dpd-dashboard`).
-- config-loader: support callback and promise style `resource.load()` (fixes dpd-clientlib TypeError on Node 22).
-
-### Dashboard (local)
-- Vendor jQuery 3.7.1 + jQuery Migrate locally for offline use and update dashboard to load them.
-- header.js: use `window.location.origin` to build the Open link (keeps https/port).
-- auth.js: replace `$.trim` usage with native `String.prototype.trim()`.
-
-[1.2.1]: https://github.com/deployd/deployd/compare/v1.2.0...v1.2.1
-
 <a name="1.2.0"></a>
 # [1.2.0](https://github.com/deployd/deployd/compare/v1.1.2...v1.2.0) (2019-04-08)
 

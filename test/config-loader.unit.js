@@ -16,8 +16,8 @@ describe('config-loader', function() {
       sh.rm('-rf', basepath);
     }
     sh.mkdir('-p', basepath);
-    this.server = new Server();
-    this.sinon = sinon.sandbox.create();
+    this.server = { db: db, options: {}, __resourceCache: [] };
+    this.sinon = sinon.createSandbox();
   });
 
   afterEach(function() {
@@ -32,8 +32,8 @@ describe('config-loader', function() {
 
       sh.mkdir('-p', path.join(basepath, 'resources/foo'));
       sh.mkdir('-p', path.join(basepath, 'resources/bar'));
-      JSON.stringify({type: "Collection", val: 1}).to(path.join(basepath, 'resources/foo/config.json'));
-      JSON.stringify({type: "Collection", val: 2}).to(path.join(basepath, 'resources/bar/config.json'));
+      sh.ShellString(JSON.stringify({type: "Collection", val: 1})).to(path.join(basepath, 'resources/foo/config.json'));
+      sh.ShellString(JSON.stringify({type: "Collection", val: 2})).to(path.join(basepath, 'resources/bar/config.json'));
 
       configLoader.loadConfig(basepath, this.server, function(err, resources) {
         if (err) return done(err);
@@ -46,7 +46,7 @@ describe('config-loader', function() {
 
     it('should return a set of resource instances', function(done) {
       sh.mkdir('-p', path.join(basepath, 'resources/foo'));
-      JSON.stringify({type: "Collection", properties: {}}).to(path.join(basepath, 'resources/foo/config.json'));
+      sh.ShellString(JSON.stringify({type: "Collection", properties: {}})).to(path.join(basepath, 'resources/foo/config.json'));
 
       configLoader.loadConfig(basepath, {db: db}, function(err, resourceList) {
         expect(resourceList).to.have.length(3);
@@ -74,7 +74,7 @@ describe('config-loader', function() {
 
     it('should not attempt to load files', function(done) {
       sh.mkdir('-p', path.join(basepath, 'resources'));
-      ('').to(path.join(basepath, 'resources/.DS_STORE'));
+      sh.ShellString('').to(path.join(basepath, 'resources/.DS_STORE'));
 
       configLoader.loadConfig(basepath, {}, function(err, resourceList) {
         if (err) return done(err);

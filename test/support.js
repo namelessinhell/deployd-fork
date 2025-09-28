@@ -2,44 +2,135 @@
  * Dependencies
  */
 
-expect = require('chai').expect;
-request = require('request');
-http = require('http');
-TEST_DB = {name: 'test-db', host: 'localhost', port: 27017};
-mongodb = require('mongodb');
-var Stream = require('stream');
-sh = require('shelljs');
+global.expect = require('chai').expect;
+const http = require('http');
+const { MongoClient } = require('mongodb');
+const Stream = require('stream');
+const sh = require('shelljs');
+const debug = require('debug')('test:support');
+
+if (typeof String.prototype.to !== 'function') {
+  Object.defineProperty(String.prototype, 'to', {
+    configurable: true,
+    writable: true,
+    enumerable: false,
+    value: function (file) {
+      return sh.ShellString(String(this)).to(file);
+    }
+  });
+}
+
+if (typeof String.prototype.toEnd !== 'function') {
+  Object.defineProperty(String.prototype, 'toEnd', {
+    configurable: true,
+    writable: true,
+    enumerable: false,
+    value: function (file) {
+      return sh.ShellString(String(this)).toEnd(file);
+    }
+  });
+}
+// Maintain backwards compatible globals for tests that rely on them.
+global.sh = sh;
+
+global.http = http;
+global.TEST_DB = { name: 'test-db', host: 'localhost', port: 27017 };
+
+const TEST_DB_URI = process.env.DPD_TEST_DB_URI || `mongodb://${TEST_DB.host}:${TEST_DB.port}/${TEST_DB.name}`;
 
 // port generation
-genPort = function() {
+function genPort() {
   var min = 6666, max = 9999;
   var result = min + (Math.random() * (max - min));
   return Math.floor(result);
-};
+}
+global.genPort = genPort;
 
+function sendHttpRequest(options, callback) {
+  var parsed = new URL(options.url);
+  var requestOptions = {
+    method: options.method || 'GET',
+    hostname: parsed.hostname,
+    port: parsed.port,
+    path: parsed.pathname + (parsed.search || ''),
+    headers: Object.assign({}, options.headers || {})
+  };
 
-// request mock
-freq = function(url, options, fn, callback) {
+  var payload = options.body;
+  var isStream = payload instanceof Stream;
+  if (options.json && payload && !isStream) {
+    if (typeof payload !== 'string' && !Buffer.isBuffer(payload)) {
+      payload = JSON.stringify(payload);
+    }
+    requestOptions.headers['Content-Type'] = requestOptions.headers['Content-Type'] || 'application/json';
+  }
+
+  if (payload && !isStream && typeof payload === 'string') {
+    requestOptions.headers['Content-Length'] = Buffer.byteLength(payload);
+  } else if (payload && Buffer.isBuffer(payload)) {
+    requestOptions.headers['Content-Length'] = payload.length;
+  }
+
+  var req = http.request(requestOptions, function (res) {
+    var chunks = [];
+    res.on('data', function (chunk) { chunks.push(chunk); });
+    res.on('end', function () {
+      var bodyBuffer = Buffer.concat(chunks);
+      var body = bodyBuffer.toString();
+      if (options.json && body.length) {
+        try {
+          res.body = JSON.parse(body);
+        } catch (err) {
+          res.body = body;
+        }
+      } else if (options.json && !body.length) {
+        res.body = null;
+      } else {
+        res.body = body;
+      }
+      callback(null, res, res.body);
+    });
+  });
+
+  req.on('error', function (err) {
+    callback(err);
+  });
+
+  if (payload) {
+    if (isStream) {
+      payload.pipe(req);
+      return;
+    }
+    if (Buffer.isBuffer(payload)) {
+      req.write(payload);
+    } else {
+      req.write(String(payload));
+    }
+  }
+
+  req.end();
+}
+
+global.freq = function (url, options, fn, callback) {
   var port = genPort();
   options = options || {};
   options.url = 'http://localhost:' + port + url;
-  var s = http.createServer(function (req, res) {
-    if(callback) {
+  var server = http.createServer(function (req, res) {
+    if (callback) {
       var end = res.end;
       res.end = function () {
-
-        var r = end.apply(res, arguments);
-        s.close();
-        return r;
+        var result = end.apply(res, arguments);
+        server.close();
+        return result;
       };
     } else {
-      s.close();
+      server.close();
     }
     fn(req, res);
   })
   .listen(port)
   .on('listening', function () {
-    request(options, function (){
+    sendHttpRequest(options, function () {
       if (callback) {
         callback.apply(null, arguments);
       }
@@ -48,19 +139,34 @@ freq = function(url, options, fn, callback) {
 };
 
 before(function (done) {
-  var mdb = new mongodb.Db(TEST_DB.name, new mongodb.Server(TEST_DB.host, TEST_DB.port));
-  mdb.open(function (err) {
-    if(err) {
-      done(err);
-    } else {
-      mdb.dropDatabase(function (err) {
-        done(err);
-        mdb.close();
-      });
-    }
-  });
-});
+  var client = new MongoClient(TEST_DB_URI, { serverSelectionTimeoutMS: 2000 });
 
+  function isIgnorableMongoError(err) {
+    if (!err) { return false; }
+    if (err.name === 'MongoServerSelectionError') { return true; }
+    if (err.code === 'ECONNREFUSED') { return true; }
+    var message = String(err.message || '');
+    if (/ECONNREFUSED/.test(message)) { return true; }
+    if (err.codeName === 'NamespaceNotFound' || /ns not found/i.test(message)) { return true; }
+    return false;
+  }
+
+  client.connect()
+    .then(function () {
+      return client.db(TEST_DB.name).dropDatabase();
+    })
+    .then(function () { return client.close(); })
+    .then(function () { done(); })
+    .catch(function (err) {
+      if (isIgnorableMongoError(err)) {
+        debug('Skipping database cleanup because MongoDB is unavailable');
+        client.close().catch(function () {});
+        done();
+        return;
+      }
+      client.close().catch(function () {}).then(function () { done(err); });
+    });
+});
 
 /**
  * Utility for easily testing resources with mock contexts
@@ -80,10 +186,10 @@ before(function (done) {
  *  - next should call next if
  */
 
-var ServerRequest = require('http').ServerRequest
-  , ServerResponse = require('http').ServerResponse;
+var ServerRequest = require('http').ServerRequest,
+  ServerResponse = require('http').ServerResponse;
 
-fauxContext = function(resource, url, input, expectedOutput, behavior) {
+global.fauxContext = function(resource, url, input, expectedOutput, behavior) {
   input = input || {};
   var context = {
     url: url,
@@ -113,3 +219,8 @@ fauxContext = function(resource, url, input, expectedOutput, behavior) {
 
   resource.handle(context, next);
 };
+
+
+
+
+

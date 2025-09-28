@@ -4,31 +4,50 @@ var fs = require('fs')
   , tester = db.create(config)
   , store = tester.createStore('test-store')
   , assert = require('assert')
-  , { MongoClient } = require('mongodb');
+  , MongoClient = require('mongodb').MongoClient;
 
-var mdb;
 var client;
+var database;
 
-before(async function(){
-  try {
-    const connectionString = `mongodb://${config.credentials.username}:${config.credentials.password}@${config.host}:${config.port}/${config.name}`;
-    client = new MongoClient(connectionString);
-    await client.connect();
-    mdb = client.db(config.name);
+function buildConnectionUri() {
+  return `mongodb://${config.host}:${config.port}`;
+}
 
-    // Note: User management is now handled differently in MongoDB v6
-    // The test assumes the user already exists or authentication is handled differently
-  } catch (err) {
-    console.error('Failed to connect to test database:', err);
-    console.log('Skipping remote database tests due to connection failure');
-    this.skip();
-  }
+function ignoreNamespace(err) {
+  if (!err) return;
+  if (err.codeName === 'NamespaceNotFound') return;
+  if (err.codeName === 'UserNotFound') return;
+  if (err.code === 11) return;
+  if (/ns not found/i.test(err.message)) return;
+  if (/User '[^']+' not found/.test(err.message)) return;
+  throw err;
+}
+
+before(function(done){
+  client = new MongoClient(buildConnectionUri(), { serverSelectionTimeoutMS: 2000 });
+  client.connect()
+    .then(function () {
+      database = client.db(config.name);
+      return database.removeUser(config.credentials.username).catch(ignoreNamespace);
+    })
+    .then(function () {
+      return database.addUser(config.credentials.username, config.credentials.password);
+    })
+    .then(function () { done(); })
+    .catch(done);
 });
 
-after(async function(){
-  if (client) {
-    await client.close();
+after(function(done){
+  var sequence = Promise.resolve();
+  if (database) {
+    sequence = sequence.then(function () {
+      return database.removeUser(config.credentials.username).catch(ignoreNamespace);
+    });
   }
+  sequence
+    .then(function () { return client ? client.close() : null; })
+    .then(function () { done(); })
+    .catch(done);
 });
 
 beforeEach(function(done){
@@ -77,3 +96,4 @@ describe('store', function(){
     // TODO: convert the rest of the tests
   });
 });
+
