@@ -84,9 +84,10 @@ describe('config-loader', function() {
 
     it('should use public_dir option if available', function(done) {
       sh.mkdir('-p', path.join(basepath, 'resources'));
+      var resolvedBase = path.resolve(basepath);
       configLoader.loadConfig(basepath, {}, function(err, resourceList) {
           if (err) return done(err);
-          expect(resourceList[0].config.public).to.equal('./public');
+          expect(resourceList[0].config.public).to.equal(path.join(resolvedBase, 'public'));
       });
 
       var opts = {};
@@ -95,7 +96,7 @@ describe('config-loader', function() {
 
       configLoader.loadConfig(basepath, opts, function(err, resourceList) {
           if (err) return done(err);
-          expect(resourceList[0].config.public).to.equal('test');
+          expect(resourceList[0].config.public).to.equal(path.join(resolvedBase, 'test'));
       });
       done();
     });
@@ -114,8 +115,23 @@ describe('config-loader', function() {
 
       configLoader.loadConfig(basepath, opts, function(err, resourceList) {
           if (err) return done(err);
-          expect(resourceList[0].config.public).to.equal(public_dir + '-dev');
+          expect(resourceList[0].config.public).to.equal(path.resolve(public_dir + '-dev'));
           done();
+      });
+    });
+
+    it('should add static file resource when public/static exists', function(done) {
+      sh.mkdir('-p', path.join(basepath, 'public/static'));
+
+      configLoader.loadConfig(basepath, {}, function(err, resourceList) {
+        if (err) return done(err);
+        expect(resourceList).to.have.length(3);
+        expect(resourceList[0] instanceof Files).to.equal(true);
+        expect(resourceList[0].name).to.equal('static');
+        expect(resourceList[0].config.public).to.equal(path.join(path.resolve(basepath), 'public', 'static'));
+        expect(resourceList[1] instanceof Files).to.equal(true);
+        expect(resourceList[1].name).to.equal('');
+        done();
       });
     });
 
